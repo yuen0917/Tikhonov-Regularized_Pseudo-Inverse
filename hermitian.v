@@ -1,3 +1,4 @@
+`timescale 1ns / 1ps
 module hermitian #(
     parameter DATA_WIDTH         = 24,
     parameter BRAM_RD_ADDR_WIDTH = 10,
@@ -12,11 +13,11 @@ module hermitian #(
     input                                      clk,
     input                                      rst_n,
     input                                      start,
-    input      signed [DATA_WIDTH-1:0]         bram_real_in,
-    input      signed [DATA_WIDTH-1:0]         bram_imag_in,
+    input      signed [DATA_WIDTH-1:0]         bram_rd_real,
+    input      signed [DATA_WIDTH-1:0]         bram_rd_imag,
     output reg        [BRAM_RD_ADDR_WIDTH-1:0] bram_rd_addr,
-    output reg signed [DATA_WIDTH-1:0]         bram_real_out,
-    output reg signed [DATA_WIDTH-1:0]         bram_imag_out,
+    output reg signed [DATA_WIDTH-1:0]         bram_wr_real,
+    output reg signed [DATA_WIDTH-1:0]         bram_wr_imag,
     output reg        [BRAM_WR_ADDR_WIDTH-1:0] bram_wr_addr,
     output                                     bram_wr_en,
     output reg [3:0]                           bram_wr_we,
@@ -64,7 +65,7 @@ module hermitian #(
         case(state)
             S_IDLE:  next_state = (start_delay[LATENCY]) ? S_RD : S_IDLE;
             S_RD:    next_state = S_WR;
-            S_WR:    next_state = (idx == TOTAL_NUM) ? S_DONE : S_WR;
+            S_WR:    next_state = (idx == TOTAL_NUM - 1) ? S_DONE : S_WR;
             S_DONE:  next_state = S_IDLE;
             default: next_state = S_IDLE;
         endcase
@@ -84,20 +85,21 @@ module hermitian #(
                     if (start_delay[LATENCY]) begin
                         bram_rd_addr <= 0;
                         bram_wr_addr <= 0;
-                        idx          <= 0;
+                        bram_wr_we   <= 4'b1111;
                     end
                 end
                 S_RD: begin
                     bram_wr_addr <= bram_rd_addr;
                 end
                 S_WR: begin
-                    bram_real_out <= bram_real_in;
-                    bram_imag_out <= -bram_imag_in;
-                    bram_rd_addr  <= bram_rd_addr + BRAM_RD_INCREASE;
-                    idx           <= (idx == TOTAL_NUM) ? idx : idx + 1;
+                    bram_wr_real <= bram_rd_real;
+                    bram_wr_imag <= -bram_rd_imag;
+                    bram_rd_addr <= bram_rd_addr + BRAM_RD_INCREASE;
+                    idx          <= (idx == TOTAL_NUM - 1) ? idx : idx + 1;
                 end
                 S_DONE: begin
                     done <= 1;
+                    idx  <= 0;
                 end
                 default: begin
                     bram_rd_addr <= 0;
