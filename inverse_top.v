@@ -8,6 +8,9 @@ module inverse_top #(
     parameter MIC_NUM              = 8,
     parameter SOR_NUM              = 2,
     parameter FREQ_NUM             = 257,
+    parameter DOUT_TDATA_WIDTH     = 48,
+    parameter DIVISOR_TDATA_WIDTH  = 32, 
+    parameter DIVIDEND_TDATA_WIDTH = 32,
     parameter signed [DATA_WIDTH-1:0] LAMBDA = 16'sh0000A4 // signed 164, s10.14
 )(
     input                                      clk,
@@ -41,8 +44,9 @@ module inverse_top #(
     localparam S_PLUS        = 3; // G = AH * A + lambda * I
     localparam S_CALDET1     = 4; // det
     localparam S_CALDET2     = 5; // G -> G^-1
-    localparam S_INVDET      = 6; // W = G^-1 * AH
-    localparam S_DONE        = 7;
+    localparam S_INVDET      = 6; 
+    localparam S_WAITDIV     = 7;
+    localparam S_DONE        = 8; // W = G^-1 * AH
 
     localparam TOTAL_NUM = MIC_NUM * SOR_NUM * FREQ_NUM;
     localparam PER_FREQ  = MIC_NUM * SOR_NUM;
