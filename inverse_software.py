@@ -302,61 +302,71 @@ def main() -> None:
     """
     Compute and print software results for the first few freqs,
     so you can compare with RTL simulation at the corresponding addresses.
+    Also writes the same output to inverse_software_output.txt.
     """
-    max_freq = min(2, FREQ_NUM)
-    for freq in range(max_freq):
-        print("=" * 60)
-        print(f"[freq {freq}] Inputs (sor0, sor1):")
-        info = compute_outputs_for_freq(freq)
+    out_path = "inverse_software_output.txt"
+    max_freq = min(257, FREQ_NUM)
 
-        # Print input vectors
-        for mic in range(MIC_NUM):
-            a0 = info["sor0"][mic]
-            a1 = info["sor1"][mic]
-            print(
-                f"  mic={mic:2d}  sor0=({int(a0.real):6d}, {int(a0.imag):6d})"
-                f"  sor1=({int(a1.real):6d}, {int(a1.imag):6d})"
-            )
+    def log(msg: str = "") -> None:
+        print(msg)
+        f.write(msg + "\n")
 
-        # Print G = A^H A (before lambda)
-        g11_b, g12_r, g12_i, g22_b = info["g_before"]
-        print("\n  G = A^H * A (before lambda):")
-        print(f"    g11 = {g11_b:12d}")
-        print(f"    g12 = ({g12_r:12d}, {g12_i:12d})")
-        print(f"    g22 = {g22_b:12d}")
+    with open(out_path, "w", encoding="utf-8") as f:
+        for freq in range(max_freq):
+            log("=" * 60)
+            log(f"[freq {freq}] Inputs (sor0, sor1):")
+            info = compute_outputs_for_freq(freq)
 
-        # Print G + lambda*I
-        g11_a, g12_r_a, g12_i_a, g22_a = info["g_after"]
-        print("\n  G + lambda*I:")
-        print(f"    g11 = {g11_a:12d}")
-        print(f"    g12 = ({g12_r_a:12d}, {g12_i_a:12d})")
-        print(f"    g22 = {g22_a:12d}")
+            # Print input vectors
+            for mic in range(MIC_NUM):
+                a0 = info["sor0"][mic]
+                a1 = info["sor1"][mic]
+                log(
+                    f"  mic={mic:2d}  sor0=({int(a0.real):6d}, {int(a0.imag):6d})"
+                    f"  sor1=({int(a1.real):6d}, {int(a1.imag):6d})"
+                )
 
-        # Print det and divider output (inv_det) for checking
-        det_info = info["det"]
-        det_mul = det_info["det_mul"]
-        det_sub = det_info["det_sub"]
-        det = det_info["det"]
-        inv_det_fp = det_info["inv_det_fp"]
-        print("\n  det check (all wrapped to hardware widths):")
-        print(f"    det_mul = g11*g22           = {det_mul:12d}")
-        print(f"    det_sub = |g12|^2 (r^2+i^2) = {det_sub:12d}")
-        print(f"    det     = det_mul - det_sub = {det:12d}")
-        print(f"    inv_det (divider, Q*.{DIVOUT_F_WIDTH}) = {inv_det_fp:16d}")
-        if det == 0:
-            print("    [warn] det == 0 -> inv_det is forced to 0 by model")
-        
-        # Print inverse matrix elements
-        inv_g11, inv_g12_r, inv_g12_i, inv_g22 = info["inv_g"]
-        print("\n  inv(G) elements (fixed-point, scaled):")
-        print(f"    inv_g11_real = {inv_g11:16d}")
-        print(f"    inv_g12      = ({inv_g12_r:16d}, {inv_g12_i:16d})")
-        print(f"    inv_g22_real = {inv_g22:16d}")
+            # Print G = A^H A (before lambda)
+            g11_b, g12_r, g12_i, g22_b = info["g_before"]
+            log("\n  G = A^H * A (before lambda):")
+            log(f"    g11 = {g11_b:12d}")
+            log(f"    g12 = ({g12_r:12d}, {g12_i:12d})")
+            log(f"    g22 = {g22_b:12d}")
 
-        # Print final outputs
-        print("\n  Outputs (row0 then row1, 16 per freq):")
-        for idx, (r, i) in enumerate(info["outputs"]):
-            print(f"    out_idx={idx:2d}  real={r:16d}  imag={i:16d}")
+            # Print G + lambda*I
+            g11_a, g12_r_a, g12_i_a, g22_a = info["g_after"]
+            log("\n  G + lambda*I:")
+            log(f"    g11 = {g11_a:12d}")
+            log(f"    g12 = ({g12_r_a:12d}, {g12_i_a:12d})")
+            log(f"    g22 = {g22_a:12d}")
+
+            # Print det and divider output (inv_det) for checking
+            det_info = info["det"]
+            det_mul = det_info["det_mul"]
+            det_sub = det_info["det_sub"]
+            det = det_info["det"]
+            inv_det_fp = det_info["inv_det_fp"]
+            log("\n  det check (all wrapped to hardware widths):")
+            log(f"    det_mul = g11*g22           = {det_mul:12d}")
+            log(f"    det_sub = |g12|^2 (r^2+i^2) = {det_sub:12d}")
+            log(f"    det     = det_mul - det_sub = {det:12d}")
+            log(f"    inv_det (divider, Q*.{DIVOUT_F_WIDTH}) = {inv_det_fp:16d}")
+            if det == 0:
+                log("    [warn] det == 0 -> inv_det is forced to 0 by model")
+
+            # Print inverse matrix elements
+            inv_g11, inv_g12_r, inv_g12_i, inv_g22 = info["inv_g"]
+            log("\n  inv(G) elements (fixed-point, scaled):")
+            log(f"    inv_g11_real = {inv_g11:16d}")
+            log(f"    inv_g12      = ({inv_g12_r:16d}, {inv_g12_i:16d})")
+            log(f"    inv_g22_real = {inv_g22:16d}")
+
+            # Print final outputs
+            log("\n  Outputs (row0 then row1, 16 per freq):")
+            for idx, (r, i) in enumerate(info["outputs"]):
+                log(f"    out_idx={idx:2d}  real={r:16d}  imag={i:16d}")
+
+    print(f"\nOutput also written to {out_path}")
 
 
 if __name__ == "__main__":
