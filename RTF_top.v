@@ -10,7 +10,7 @@ module RTF_top #(
     parameter BRAM_RD_ADDR_BASE    = 0,
     parameter BRAM_WR_ADDR_BASE    = 0,
     parameter BRAM_RD_INCREASE     = 2, // 16 / 8 = 2
-    parameter BRAM_WR_INCREASE     = 6, // 48 / 8 = 6
+    parameter BRAM_WR_INCREASE     = 8, // 64 / 8 = 8
     parameter BRAM_WR_WE_WIDTH     = 6,
     parameter DIVOUT_TDATA_WIDTH   = 64,
     parameter DIVOUT_F_WIDTH       = 32,

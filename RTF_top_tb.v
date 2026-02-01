@@ -5,7 +5,7 @@ module RTF_top_tb ();
     localparam BRAM_WR_ADDR_WIDTH = 32;
     localparam BRAM_WR_WE_WIDTH   = 6;
     localparam BRAM_RD_INCREASE   = 2;
-    localparam BRAM_WR_INCREASE   = 6;
+    localparam BRAM_WR_INCREASE   = 8;
     localparam MIC_NUM            = 8;
     localparam SOR_NUM            = 2;
     localparam FREQ_NUM           = 257;

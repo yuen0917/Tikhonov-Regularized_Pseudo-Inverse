@@ -305,7 +305,7 @@ def main() -> None:
     so you can compare with RTL simulation at the corresponding addresses.
     Also writes the same output to RTF_software_output.txt.
     """
-    out_path = "RTF_software_output.txt"
+    out_path = "./RTF_software_output.txt"
     max_freq = min(257, FREQ_NUM)
 
     def log(msg: str = "") -> None:
