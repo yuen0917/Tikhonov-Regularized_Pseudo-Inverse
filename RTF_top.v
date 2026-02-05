@@ -5,13 +5,13 @@ module RTF_top #(
     parameter FREQ_NUM             = 257,
     parameter DATA_WIDTH           = 16,
     parameter LATENCY              = 2,
-    parameter BRAM_RD_ADDR_WIDTH   = 32,
+    parameter BRAM_RD_ADDR_WIDTH   = 14,
     parameter BRAM_WR_ADDR_WIDTH   = 32,
     parameter BRAM_RD_ADDR_BASE    = 0,
     parameter BRAM_WR_ADDR_BASE    = 0,
     parameter BRAM_RD_INCREASE     = 2, // 16 / 8 = 2
     parameter BRAM_WR_INCREASE     = 8, // 64 / 8 = 8
-    parameter BRAM_WR_WE_WIDTH     = 6,
+    parameter BRAM_WR_WE_WIDTH     = 8,
     parameter DIVOUT_TDATA_WIDTH   = 64,
     parameter DIVOUT_F_WIDTH       = 32,
     parameter DIVISOR_TDATA_WIDTH  = 32,
@@ -22,7 +22,7 @@ module RTF_top #(
     input                                        rst_n,
     input                                        start,
     output reg                                   done,
-    output reg                                   all_freq_finish,
+    output                                       all_freq_finish,
 
     // read bram data
     input      signed [DATA_WIDTH-1:0]           af_bram_rd_real,
@@ -61,8 +61,9 @@ module RTF_top #(
     localparam S_WR             = 11; // write result to bram
     localparam S_UPDATE_WR_ADDR = 12; // update bram write address
     localparam S_DONE           = 13; // done
+    localparam S_RESTART        = 14; // return to S_RD
 
-    localparam TOTAL_NUM = MIC_NUM * SOR_NUM * FREQ_NUM;
+    localparam TOTAL_NUM = MIC_NUM * SOR_NUM * FREQ_NUM; // 8 * 2 * 257 = 4112
     localparam PER_FREQ  = MIC_NUM * SOR_NUM;
 
     // ==============================
@@ -134,7 +135,8 @@ module RTF_top #(
     reg signed [DATA_WIDTH*4-1:0] result_imag_element2;
 
 
-    assign inv_det = ($signed(inv_det_q) <<< (DIVOUT_F_WIDTH - 1)) + $signed(inv_det_f);
+    assign inv_det         = ($signed(inv_det_q) <<< (DIVOUT_F_WIDTH - 1)) + $signed(inv_det_f);
+    assign all_freq_finish = (freq_sample_cnt == FREQ_NUM - 1) ? 1 : 0;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -159,7 +161,8 @@ module RTF_top #(
             S_CALRESULT:      next_state = S_WR;
             S_WR:             next_state = (wr_cnt == PER_FREQ - 1) ? S_DONE : S_UPDATE_WR_ADDR;
             S_UPDATE_WR_ADDR: next_state = S_CALRESULT;
-            S_DONE:           next_state = S_IDLE;
+            S_DONE:           next_state = (all_freq_finish == 1) ? S_IDLE : S_RESTART;
+            S_RESTART:        next_state = S_RD;
             default:          next_state = S_IDLE;
         endcase
     end
@@ -213,33 +216,31 @@ module RTF_top #(
             result_imag_element2 <= 0;
             result_bram_wr_real  <= 0;
             result_bram_wr_imag  <= 0;
-            all_freq_finish      <= 0;
             done                 <= 0;
         end else begin
             case (state)
                 S_IDLE: begin // state 0
+                    done                 <= 0;
                     if (start_delay[LATENCY]) begin
-                        sor_cnt    <= 0;
-                        rd_cnt     <= 0;
                         for (i = 0; i < MIC_NUM; i = i + 1) begin
                             sor0_temp_real[i] <= 0;
                             sor0_temp_imag[i] <= 0;
                             sor1_temp_real[i] <= 0;
                             sor1_temp_imag[i] <= 0;
                         end
-                        g11_real_acc <= 0;
-                        g12_real_acc <= 0;
-                        g12_imag_acc <= 0;
-                        g22_real_acc <= 0;
-                        inv_g11_real <= 0;
-                        inv_g12_real <= 0;
-                        inv_g12_imag <= 0;
-                        inv_g22_real <= 0;
-                        det          <= 0;
-                        inv_det_q    <= 0;
-                        inv_det_f    <= 0;
-                        done         <= 0;
-                        all_freq_finish      <= 0;
+                        sor_cnt              <= 0;
+                        rd_cnt               <= 0;
+                        g11_real_acc         <= 0;
+                        g12_real_acc         <= 0;
+                        g12_imag_acc         <= 0;
+                        g22_real_acc         <= 0;
+                        inv_g11_real         <= 0;
+                        inv_g12_real         <= 0;
+                        inv_g12_imag         <= 0;
+                        inv_g22_real         <= 0;
+                        det                  <= 0;
+                        inv_det_q            <= 0;
+                        inv_det_f            <= 0;
                         result_real_element0 <= 0;
                         result_real_element1 <= 0;
                         result_real_element2 <= 0;
@@ -250,6 +251,8 @@ module RTF_top #(
                         result_bram_wr_imag  <= 0;
                         flag_rd_sor1         <= 0;
                         result_row1          <= 0;
+                        bram_rd_addr         <= BRAM_RD_ADDR_BASE;
+                        bram_wr_addr         <= BRAM_WR_ADDR_BASE;
                     end
                 end
                 S_RD: begin // state 1
@@ -340,15 +343,94 @@ module RTF_top #(
                 end
                 S_DONE: begin // state 13
                     result_row1     <= 0;
-                    freq_sample_cnt <= (freq_sample_cnt == FREQ_NUM - 1) ? 0 : freq_sample_cnt + 1;
-                    all_freq_finish <= (freq_sample_cnt == FREQ_NUM - 1) ? 1 : 0;
                     sor_cnt         <= 0;
                     wr_cnt          <= 0;
                     done            <= 1;
                     bram_wr_addr    <= bram_wr_addr + BRAM_WR_INCREASE; // for next bram write start
+                    if (freq_sample_cnt == FREQ_NUM - 1) begin
+                        freq_sample_cnt <= 0;
+                    end else begin
+                        freq_sample_cnt <= freq_sample_cnt + 1;
+                    end
+                end
+                S_RESTART: begin // state 14
+                    for (i = 0; i < MIC_NUM; i = i + 1) begin
+                        sor0_temp_real[i] <= 0;
+                        sor0_temp_imag[i] <= 0;
+                        sor1_temp_real[i] <= 0;
+                        sor1_temp_imag[i] <= 0;
+                    end
+                    g11_real_acc         <= 0;
+                    g12_real_acc         <= 0;
+                    g12_imag_acc         <= 0;
+                    g22_real_acc         <= 0;
+                    inv_g11_real         <= 0;
+                    inv_g12_real         <= 0;
+                    inv_g12_imag         <= 0;
+                    inv_g22_real         <= 0;
+                    det                  <= 0;
+                    inv_det_q            <= 0;
+                    inv_det_f            <= 0;
+                    done                 <= 0;
+                    result_real_element0 <= 0;
+                    result_real_element1 <= 0;
+                    result_real_element2 <= 0;
+                    result_imag_element0 <= 0;
+                    result_imag_element1 <= 0;
+                    result_imag_element2 <= 0;
+                    result_bram_wr_real  <= 0;
+                    result_bram_wr_imag  <= 0;
+                    flag_rd_sor1         <= 0;
+                    rd_cnt               <= 0;
                 end
                 default: begin
+                    // bram addr
+                    bram_rd_addr <= BRAM_RD_ADDR_BASE;
+                    bram_wr_addr <= BRAM_WR_ADDR_BASE;
 
+                    // sor0 and sor1 temp register
+                    for (i = 0; i < MIC_NUM; i = i + 1) begin
+                        sor0_temp_real[i] <= 0;
+                        sor0_temp_imag[i] <= 0;
+                        sor1_temp_real[i] <= 0;
+                        sor1_temp_imag[i] <= 0;
+                    end
+                    flag_rd_sor1 <= 0;
+                    result_row1  <= 0;
+
+                    // G register
+                    g11_real_acc <= 0;
+                    g12_real_acc <= 0;
+                    g12_imag_acc <= 0;
+                    g22_real_acc <= 0;
+
+                    // det register
+                    det          <= 0;
+                    inv_det_q    <= 0;
+                    inv_det_f    <= 0;
+
+                    // to divider
+                    s_axis_dividend_tdata  <= 0;
+                    s_axis_dividend_tvalid <= 0;
+                    s_axis_divisor_tdata   <= 0;
+                    s_axis_divisor_tvalid  <= 0;
+
+                    // counter
+                    sor_cnt         <= 3'd0;
+                    rd_cnt          <= 4'd0;
+                    wr_cnt          <= 4'd0;
+                    freq_sample_cnt <= 9'd0;
+
+                    // result
+                    result_real_element0 <= 0;
+                    result_real_element1 <= 0;
+                    result_real_element2 <= 0;
+                    result_imag_element0 <= 0;
+                    result_imag_element1 <= 0;
+                    result_imag_element2 <= 0;
+                    result_bram_wr_real  <= 0;
+                    result_bram_wr_imag  <= 0;
+                    done                 <= 0;
                 end
             endcase
         end
